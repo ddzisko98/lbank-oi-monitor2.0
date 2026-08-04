@@ -33,10 +33,12 @@ def fetch_open_interest() -> float:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ))
-        page.goto(URL, timeout=30000, wait_until="networkidle")
+        # networkidle тут ніколи не настає (сторінка постійно оновлює котирування),
+        # тому чекаємо лише завантаження DOM і далі опитуємо текст самі.
+        page.goto(URL, timeout=60000, wait_until="domcontentloaded")
 
         value = None
-        for _ in range(15):
+        for _ in range(30):
             text = page.inner_text("body")
             match = OI_PATTERN.search(text)
             if match:
