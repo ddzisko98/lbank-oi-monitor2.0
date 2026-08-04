@@ -118,17 +118,24 @@ def main() -> None:
 
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] CXMTUSDT Позиції = {current_oi}")
 
+    # Мінімальне падіння (в абсолютних одиницях OI), при якому надсилаємо
+    # сповіщення. Змінити поріг можна тут.
+    MIN_DROP_THRESHOLD = 1000
+
     if prev_oi is not None and current_oi < prev_oi:
         diff = prev_oi - current_oi
-        pct = (diff / prev_oi) * 100 if prev_oi else 0
-        message = (
-            f"📉 CXMTUSDT: Open Interest (Позиції) зменшився\n"
-            f"Було: {prev_oi}\n"
-            f"Стало: {current_oi}\n"
-            f"Зміна: -{diff:.4f} (-{pct:.2f}%)"
-        )
-        send_telegram_message(message)
-        print("Надіслано сповіщення в Telegram.")
+        if diff >= MIN_DROP_THRESHOLD:
+            pct = (diff / prev_oi) * 100 if prev_oi else 0
+            message = (
+                f"📉 CXMTUSDT: Open Interest (Позиції) зменшився\n"
+                f"Було: {prev_oi}\n"
+                f"Стало: {current_oi}\n"
+                f"Зміна: -{diff:.4f} (-{pct:.2f}%)"
+            )
+            send_telegram_message(message)
+            print(f"Падіння {diff:.4f} >= порогу {MIN_DROP_THRESHOLD}. Надіслано сповіщення в Telegram.")
+        else:
+            print(f"Падіння {diff:.4f} менше порогу {MIN_DROP_THRESHOLD}. Сповіщення не надіслано.")
 
     save_state({"open_interest": current_oi, "updated_at": time.time()})
 
