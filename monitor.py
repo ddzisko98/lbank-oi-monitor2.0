@@ -1,8 +1,8 @@
 """
 Моніторинг Open Interest ("Позиції") для CXMTUSDT на LBank Futures.
-Замість прихованого API скрипт відкриває сторінку в headless-браузері
-(Playwright), чекає завантаження даних і зчитує значення "Позиції"
-прямо з відрендереної сторінки — так само, як його бачить людина.
+Відкриває сторінку в headless-браузері (Playwright), чекає завантаження
+даних і зчитує значення "Позиції"/"Positions" прямо з відрендереної
+сторінки.
 
 Надсилає повідомлення в Telegram, коли значення зменшується порівняно
 з попередньою перевіркою. Стан зберігається у state.json.
@@ -23,37 +23,51 @@ STATE_FILE = "state.json"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-OI_PATTERN = re.compile(r"Позиц[іi]ї\s*[\r\n]*\s*([\d][\d.,]*)\s*\(CXMT\)", re.IGNORECASE)
+# Пробуємо і українську, і англійську версію тексту (сайт може
+# перенаправити на іншу мову залежно від геолокації/заголовків сервера).
+OI_PATTERNS = [
+    re.compile(r"Позиц[іi]ї\s*[\r\n]*\s*([\d][\d.,]*)\s*\(CXMT\)", re.IGNORECASE),
+    re.compile(r"Positions?\s*[\r\n]*\s*([\d][\d.,]*)\s*\(CXMT\)", re.IGNORECASE),
+]
 
 
 def fetch_open_interest() -> float:
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ))
-        # networkidle тут ніколи не настає (сторінка постійно оновлює котирування),
-        # тому чекаємо лише завантаження DOM і далі опитуємо текст самі.
+        page = browser.new_page(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            extra_http_headers={"Accept-Language": "uk-UA,uk;q=0.9,en;q=0.8"},
+        )
         page.goto(URL, timeout=60000, wait_until="domcontentloaded")
 
         value = None
+        last_text = ""
         for _ in range(30):
             text = page.inner_text("body")
-            match = OI_PATTERN.search(text)
-            if match:
-                raw = match.group(1).replace(",", "")
-                if raw not in ("--", "-", ""):
-                    value = float(raw)
-                    break
+            last_text = text
+            for pattern in OI_PATTERNS:
+                match = pattern.search(text)
+                if match:
+                    raw = match.group(1).replace(",", "")
+                    if raw not in ("--", "-", ""):
+                        value = float(raw)
+                        break
+            if value is not None:
+                break
             page.wait_for_timeout(1000)
 
+        final_url = page.url
         browser.close()
 
         if value is None:
+            snippet = last_text[:1500].replace("\n", " | ")
             raise RuntimeError(
-                "Не вдалося зчитати значення 'Позиції' зі сторінки "
-                "(можливо, змінилась розмітка сайту або значення не встигло завантажитись)"
+                "Не вдалося зчитати значення 'Позиції' зі сторінки.\n"
+                f"Фінальний URL після завантаження: {final_url}\n"
+                f"Перші 1500 символів тексту сторінки: {snippet}"
             )
         return value
 
