@@ -2,9 +2,9 @@ name: Monitor CXMTUSDT Open Interest
 
 on:
   schedule:
-    # Кожні 15 хвилин (headless-браузер важчий за прості HTTP-запити,
+    # Кожні 5 хвилин.
     # тому не варто ставити занадто часто на безкоштовному тарифі).
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}  # дозволяє запустити вручну кнопкою "Run workflow"
 
 permissions:
