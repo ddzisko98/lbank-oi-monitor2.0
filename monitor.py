@@ -25,10 +25,18 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # Пробуємо і українську, і англійську версію тексту (сайт може
 # перенаправити на іншу мову залежно від геолокації/заголовків сервера).
+# Значення може мати суфікс K/M/B (напр. "260.359K (CXMT)").
 OI_PATTERNS = [
-    re.compile(r"Позиц[іi]ї\s*[\r\n]*\s*([\d][\d.,]*)\s*\(CXMT\)", re.IGNORECASE),
-    re.compile(r"Positions?\s*[\r\n]*\s*([\d][\d.,]*)\s*\(CXMT\)", re.IGNORECASE),
+    re.compile(r"Позиц[іi]ї\s*[\r\n]*\s*([\d][\d.,]*)\s*([KMB]?)\s*\(CXMT\)", re.IGNORECASE),
+    re.compile(r"Positions?\s*[\r\n]*\s*([\d][\d.,]*)\s*([KMB]?)\s*\(CXMT\)", re.IGNORECASE),
 ]
+
+SUFFIX_MULTIPLIER = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}
+
+
+def parse_value(raw_number: str, suffix: str) -> float:
+    number = float(raw_number.replace(",", ""))
+    return number * SUFFIX_MULTIPLIER.get(suffix.upper(), 1)
 
 
 def fetch_open_interest() -> float:
@@ -51,9 +59,9 @@ def fetch_open_interest() -> float:
             for pattern in OI_PATTERNS:
                 match = pattern.search(text)
                 if match:
-                    raw = match.group(1).replace(",", "")
+                    raw = match.group(1)
                     if raw not in ("--", "-", ""):
-                        value = float(raw)
+                        value = parse_value(raw, match.group(2))
                         break
             if value is not None:
                 break
